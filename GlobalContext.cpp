@@ -627,6 +627,7 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
 			if(!texcache->contains(hash)){//just check if texture is cached
                 ifstream ifile(filename);
                 if (ifile.fail()) { 
+					texcache->erase(Handle);
 					debugtype = String("noreplace"); //No file, allow normal SetTexture
 					//if(texturename == "iconflmaster_15"){
 					//	checkfile << "ifile fail, su puta madre.\n";
@@ -666,9 +667,9 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
 
             }
 			else{//texture in cache, hash found
-				if(!texcache->contains(Handle)){//handle not found
+				//if(!texcache->contains(Handle)){//handle not found
 					texcache->insert(Handle,hash);
-				}
+				//}
 			}
 
         }
