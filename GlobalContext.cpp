@@ -261,7 +261,7 @@ void GlobalContext::Init ()
 
 //Cosas a probar:
 //Desenrrollado de bucles
-//Paralelización de tareas
+//ParalelizaciÃ³n de tareas
 void Hash_Algorithm_1 (BYTE* pData, UINT pitch, int width, int height)	//hash algorithm that preferences top and left sides
 {
 	int blocksize = 16;
@@ -605,7 +605,7 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
 
         
         if (texturename == "NO_MATCH")
-        { //Handle inválido, lo borro, pero no su posible textura asociada.
+        { //Handle invÃ¡lido, lo borro, pero no su posible textura asociada.
 			texcache->erase(Handle);
             debugtype = String("nomatch");
         } else { //Texture FOUND in Hash_Algorithm_1 OR is a COLLISION
@@ -621,9 +621,6 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
             }
 
             string filename = texdir + "textures\\" + texturename.substr(0, 2) + "\\" + texturename.substr(0, texturename.rfind("_")) + "\\" + texturename + ".png";
-			//if(texturename == "iconflmaster_15" && hash == 11111111121111099999){
-			//	checkfile << "Llega al puto else, se va a cargar.\n";
-			//}
 			if(!texcache->contains(hash)){//just check if texture is cached
                 ifstream ifile(filename);
                 if (ifile.fail()) { 
@@ -655,21 +652,14 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
                     }
                     newtexture->UnlockRect(0); //Texture loaded
                     HANDLE tempnewhandle = (HANDLE)newtexture;
-
-					//checkfile << "\nCache inserted (" << texturename << ") size: " << texcache->entries_ << flush;
-					//if(texturename == "iconflmaster_15"){
-					//	checkfile << "Se ha puto cargado en cache, como te quedas.\n Handle: " 
-					//		<< (uint64_t)Handle << " ReplacementHandle: " << (uint64_t)newtexture << "\n";
-					//}
 					texcache->insert(Handle,hash,tempnewhandle);
 					//checkfile << "\nCache inserted (" << texturename << ") size: " << texcache->entries_ << flush << endl;
                }
 
             }
 			else{//texture in cache, hash found
-				//if(!texcache->contains(Handle)){//handle not found
+				//if(!texcache->contains(Handle))//handle not found
 					texcache->insert(Handle,hash);
-				//}
 			}
 
         }
