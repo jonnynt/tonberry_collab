@@ -626,9 +626,6 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
                 if (ifile.fail()) { 
 					texcache->erase(Handle);
 					debugtype = String("noreplace"); //No file, allow normal SetTexture
-					//if(texturename == "iconflmaster_15"){
-					//	checkfile << "ifile fail, su puta madre.\n";
-					//}
                 } else {    //Load texture into cache
                     LPDIRECT3DDEVICE9 Device = g_Context->Graphics.Device();
                     IDirect3DTexture9* newtexture;  
