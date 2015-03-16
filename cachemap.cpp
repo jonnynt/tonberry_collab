@@ -136,6 +136,24 @@ void TextureCache::map_insert(uint64_t hash, nhcache_list_iter item, HANDLE repl
 #endif
 }
 
+void TextureCache::fastupdate(HANDLE replaced){
+	uint64_t hash = handlecache->find(replaced)->second;
+	//no need to check if it exists... it obviously does
+	nhcache_map_iter updated = nh_map->find(hash);	// this line is now needed, we want to check if we update or not 
+	if (updated == nh_map->end()) return;	//not actually needed, but will keep it, just in case ;)
+
+	/* UPDATE NH CACHE ACCESS ORDER */
+	nhcache_list_iter item = updated->second;
+
+	// move (most-recently-accessed) list item to front of nh_list
+	nh_list->push_front(*item);
+	nh_list->erase(item);
+
+	updated->second = nh_list->begin();
+
+	//don't need to update handlecache or reverse_handlecache since our precondition is to have all them coherent.
+}
+
 bool TextureCache::update(HANDLE replaced, uint64_t hash)
 {
 #if DEBUG

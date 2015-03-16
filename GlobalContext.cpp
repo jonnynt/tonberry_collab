@@ -3,7 +3,35 @@
 #include <sstream>
 #include <boost\filesystem.hpp>
 #include "cachemap.h"
+#include <Windows.h>
 
+#define DEBUG 1
+
+#if DEBUG
+double PCFreq = 0.0;
+__int64 CounterStart = 0;
+string debug_file = "tonberry\\tests\\timing.csv";
+ofstream debug(debug_file, ofstream::out | ofstream::app);
+
+void StartCounter()
+{
+    LARGE_INTEGER li;
+    if(!QueryPerformanceFrequency(&li))
+	cout << "QueryPerformanceFrequency failed!\n";
+
+    PCFreq = double(li.QuadPart)/1000000.0;
+
+    QueryPerformanceCounter(&li);
+    CounterStart = li.QuadPart;
+}
+
+double GetCounter()
+{
+    LARGE_INTEGER li;
+    QueryPerformanceCounter(&li);
+    return double(li.QuadPart-CounterStart)/PCFreq;
+}
+#endif
 /*********************************
 *								 *
 *$(SolutionDir)$(Configuration)\ *
@@ -640,14 +668,25 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
 
 bool GlobalContext::SetTexture(DWORD Stage, HANDLE* SurfaceHandles, UINT SurfaceHandleCount)
 {
+#if DEBUG
+	StartCounter();
+#endif
        for (int j = 0; j < SurfaceHandleCount; j++) {
                IDirect3DTexture9* newtexture;
                if (SurfaceHandles[j] && (newtexture = (IDirect3DTexture9*)texcache->at(SurfaceHandles[j]))) {
+				  
                        g_Context->Graphics.Device()->SetTexture(Stage, newtexture);
-                       //((IDirect3DTexture9*)SurfaceHandles[j])->Release();
+                   //texcache->fastupdate(SurfaceHandles[j]);
+					   //((IDirect3DTexture9*)SurfaceHandles[j])->Release();
+#if DEBUG
+  debug << GetCounter() << endl;
+#endif
                        return true;
                } // Texture replaced!
        }
+#if DEBUG
+  debug << GetCounter() << endl;
+#endif
        return false;
 }
 
