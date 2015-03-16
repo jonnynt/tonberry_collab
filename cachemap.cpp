@@ -17,9 +17,9 @@ TextureCache::TextureCache(unsigned max_size)
 	debug.close();
 #endif
 
-	nh_list				= new nhcache_list_t();
-	nh_map				= new nhcache_map_t();
-	handlecache			= new handlecache_t();
+	nh_list = new nhcache_list_t();
+	nh_map = new nhcache_map_t();
+	handlecache = new handlecache_t();
 	reverse_handlecache = new reverse_handlecache_t();
 }
 
@@ -90,7 +90,10 @@ void TextureCache::map_insert(uint64_t hash, nhcache_list_iter item, HANDLE repl
 	if (!cache_insertion.second) {															// if handlecache already contained HANDLE,
 		uint64_t old_hash = cache_insertion.first->second;
 
-		if (old_hash == hash) {			
+		if (old_hash == hash) {																// if the entry is the same, then nothing needs to change
+#if DEBUG
+			debug.close();
+#endif
 			return;
 		}																					// otherwise, we need to remove the old reverse_handlecache entry
 
@@ -107,7 +110,18 @@ void TextureCache::map_insert(uint64_t hash, nhcache_list_iter item, HANDLE repl
 				break;
 			}
 		cache_insertion.first->second = hash;												// change handlecache entry
+#if DEBUG
+		debug << "\tChanging (" << cache_insertion.first->first << ", (" << old_hash << ")) to ";
+		debug << "(" << replaced << ", (" << item->first << ")) in handlecache: ";
+		debug << "nh_map[" << hash << "] = " << nh_map->at(hash)->second << endl;
+	} else {
+		debug << "\tAdding (" << replaced << ", (" << hash << ")) to handlecache: ";		// actually already did so in if() above
+		debug << "nh_map[" << hash << "] = " << nh_map->at(hash)->second << endl;
 	}
+#else
+}
+#endif
+
 	reverse_handlecache->emplace(nhcache_item_t(hash, replaced));
 
 #if DEBUG
@@ -132,7 +146,7 @@ void TextureCache::insert(HANDLE replaced, uint64_t hash)
 
 	nhcache_map_iter updated = nh_map->find(hash);	//really needed?									// this line is needed, we need to access the map item 
 	if (updated == nh_map->end()) return;			//our precondition is to have an existing hash!		// this line... yes, this should never happen, but if for some reason it does
-																										// (bug in GlobalContext, whatever) this will prevent a crash
+	// (bug in GlobalContext, whatever) this will prevent a crash
 	/* UPDATE NH CACHE ACCESS ORDER */
 	nhcache_list_iter item = updated->second;
 
