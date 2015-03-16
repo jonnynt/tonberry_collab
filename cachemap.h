@@ -66,10 +66,10 @@ public:
 		);
 
 
-	/*insert: if nh_map[hash] exists, inserts replaced :-> hash into the handlecache cache,
-			  else does nothing
+	/*update: if nh_map[hash] exists, inserts replaced :-> hash into the handlecache cache.
+	  returns: true if nh_map[hash] exist, false if it doesn't
 	*/
-	void insert(HANDLE replaced,	// the handlecache key
+	bool update(HANDLE replaced,	// the handlecache key
 				uint64_t hash			// the nhcache key
 		);
 

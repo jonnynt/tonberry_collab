@@ -75,12 +75,6 @@ BigInteger hashval2; //hashval for algo 2
 float resize_factor;
 string texdir("");
 
-//CACHE added Jay
-//hashmap cache NOT USED ANYMORE
-//HashCache hashcache(100);
-//HashCache::iterator hash_it;
-//pair<uint64_t,string> hash_element;
-
 //TextureCache
 unsigned cache_size = 1000;
 TextureCache * texcache;
@@ -88,17 +82,7 @@ TextureCache * texcache;
 void initCache(){
 	texcache = new TextureCache(cache_size);
 }
-/*
-void initVectors ()
-{
-	//pixval.reserve(64);
-	//pixval2.reserve(98);
-	//objval.reserve(64);
-	pngnames.reserve(100);
-	handles.reserve(100);
-	newhandles.reserve(100);
-}
-*/
+
 void loadprefs ()
 {
 	resize_factor = 4.0;
@@ -250,7 +234,6 @@ void GlobalContext::Init ()
 	CloseHandle(hLogFile);*/
 	//------------
     Graphics.Init();
-	//initVectors();
 	loadprefs();
 	loadhashfile();
 	loadcollfile();
@@ -259,9 +242,6 @@ void GlobalContext::Init ()
 	initCache();//has to be called after loadprefs() so we get the propper cache_size!
 }
 
-//Cosas a probar:
-//Desenrrollado de bucles
-//Paralelización de tareas
 void Hash_Algorithm_1 (BYTE* pData, UINT pitch, int width, int height)	//hash algorithm that preferences top and left sides
 {
 	int blocksize = 16;
@@ -453,31 +433,20 @@ string getfield (uint64_t & hash)	//simple sequential bit comparisons
 		if ((pixval[i] - lastpixel) >= 0) {	hashval++; }
 		lastpixel = pixval[i];
     }
-	/*
-	hash_it = hashcache.find(hashval);
-	if(hash_it != hashcache.end() ){
-		//checkfile << "Cache hit! " << hash_it->first << "," << hash_it->second << endl;
-		hash_element = *hash_it;
-		hashcache.update(hash_it);
+
+	it = hashmap.find(hashval);
+	if (it != hashmap.end()) { 
 		hash = hashval;
-		return hash_element.second;
+		return it->second; 
 	}
-	else{
-	*/
-		it = hashmap.find(hashval);
-		if (it != hashmap.end()) { 
-			//hashcache.insert(it->first,it->second);
+	else {
+		it = collmap.find(hashval);
+		if (it != collmap.end()) {
 			hash = hashval;
-			return it->second; 
+			return "COLLISION"; 
 		}
-		else {
-			it = collmap.find(hashval);
-			if (it != collmap.end()) {
-				hash = hashval;
-				return "COLLISION"; 
-			}
-		}
-	//}
+	}
+
 	return getobj(hash);
 }
 
@@ -496,7 +465,8 @@ string getfield2 ()	//simple sequential bit comparisons, algorithm 2
 	return "NO_MATCH2";
 }
 
-uint64_t parseiconfl(string texname){
+uint64_t parseiconfl(string texname){ 
+//that crappy quick-fix function will allow us to identify the ic textures until the new hashing is ready.
 	uint64_t hash = 0;
 	string token;
 	ofstream check;
@@ -599,13 +569,9 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
 
         if (texturename == "sysfld00_13" || texturename == "sysfld01_13") { texturename = getsysfld(pData, pitch, Desc.Width, Desc.Height, texturename);hash = parsesysfld(texturename);} //Exception for sysfld00 and sysfld01
         if (texturename == "iconfl00_13" || texturename == "iconfl01_13" || texturename == "iconfl02_13" || texturename == "iconfl03_13" || texturename == "iconflmaster_13") { texturename = geticonfl(pData, pitch, Desc.Width, Desc.Height, texturename); hash = parseiconfl(texturename);} //Exception for iconfl00, iconfl01, iconfl02, iconfl03, iconflmaster
-
-        //Para ver por encima que textura es cada cosa.
-        //checkfile << "Texnumber: " << m << " Tex: " << texturename << " W: " << Desc.Width << " H: " << Desc.Height << endl;
-
         
         if (texturename == "NO_MATCH")
-        { //Handle inválido, lo borro, pero no su posible textura asociada.
+        { //Handle inv�lido, lo borro, pero no su posible textura asociada.
 			texcache->erase(Handle);
             debugtype = String("nomatch");
         } else { //Texture FOUND in Hash_Algorithm_1 OR is a COLLISION
@@ -621,7 +587,7 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
             }
 
             string filename = texdir + "textures\\" + texturename.substr(0, 2) + "\\" + texturename.substr(0, texturename.rfind("_")) + "\\" + texturename + ".png";
-			if(!texcache->contains(hash)){//just check if texture is cached
+			if(!texcache->update(Handle,hash)){//directly updated if it succeeds we just end unlockrect cycle.
                 ifstream ifile(filename);
                 if (ifile.fail()) { 
 					texcache->erase(Handle);
@@ -649,15 +615,11 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
                     }
                     newtexture->UnlockRect(0); //Texture loaded
                     HANDLE tempnewhandle = (HANDLE)newtexture;
+
 					texcache->insert(Handle,hash,tempnewhandle);
-					//checkfile << "\nCache inserted (" << texturename << ") size: " << texcache->entries_ << flush << endl;
                }
 
             }
-			else{//texture in cache, hash found
-				//if(!texcache->contains(Handle))//handle not found
-					texcache->insert(Handle,hash);
-			}
 
         }
         pTexture->UnlockRect(0); //Finished reading pTextures bits
@@ -665,9 +627,7 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
        // this is the beauty of your solution; you replaced that whole O(n^2) loop bullshit with one line ;)
 		texcache->erase(Handle);
 		debugtype = String("error");
-		//checkfile << "\nCache erased notpropper tex, size: " << texcache->entries_ << endl;
     }
-   // if (debugtype == String("")) { debugtype = String("error"); }
     //Debug
     if(debugmode){
         String debugfile = String("tonberry\\debug\\") + debugtype + String("\\") + String::ZeroPad(String(m), 3) + String(".bmp");
@@ -677,27 +637,16 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
 }
 
 //Final settex
-//bool GlobalContext::SetTexture (DWORD Stage, HANDLE* SurfaceHandles, UINT SurfaceHandleCount)
-//{
-//	IDirect3DTexture9* newtexture = NULL;
-//    for (int j = 0; j < SurfaceHandleCount; j++){
-//        if ( texcache->setTexture( SurfaceHandles[j] , &newtexture) ){    
-//			g_Context->Graphics.Device()->SetTexture(Stage, newtexture);
-//			return true;
-//		}
-//	}
-//    return false;
-//}
 
 bool GlobalContext::SetTexture(DWORD Stage, HANDLE* SurfaceHandles, UINT SurfaceHandleCount)
 {
        for (int j = 0; j < SurfaceHandleCount; j++) {
-            IDirect3DTexture9* newtexture;
-            if (SurfaceHandles[j] && (newtexture = (IDirect3DTexture9*)texcache->at(SurfaceHandles[j]))) {
-                    g_Context->Graphics.Device()->SetTexture(Stage, newtexture);
-                    //((IDirect3DTexture9*)SurfaceHandles[j])->Release();
-                    return true;
-            } // Texture replaced!
+               IDirect3DTexture9* newtexture;
+               if (SurfaceHandles[j] && (newtexture = (IDirect3DTexture9*)texcache->at(SurfaceHandles[j]))) {
+                       g_Context->Graphics.Device()->SetTexture(Stage, newtexture);
+                       //((IDirect3DTexture9*)SurfaceHandles[j])->Release();
+                       return true;
+               } // Texture replaced!
        }
        return false;
 }

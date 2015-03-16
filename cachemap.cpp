@@ -136,17 +136,16 @@ void TextureCache::map_insert(uint64_t hash, nhcache_list_iter item, HANDLE repl
 #endif
 }
 
-
-void TextureCache::insert(HANDLE replaced, uint64_t hash)
+bool TextureCache::update(HANDLE replaced, uint64_t hash)
 {
 #if DEBUG
 	ofstream debug(debug_file, ofstream::out | ofstream::app);
 	debug << "Inserting (" << replaced << " :-> nh_map[" << hash << "] = " << nh_map->at(hash)->second << "):" << endl;
 #endif
 
-	nhcache_map_iter updated = nh_map->find(hash);	//really needed?									// this line is needed, we need to access the map item 
-	if (updated == nh_map->end()) return;			//our precondition is to have an existing hash!		// this line... yes, this should never happen, but if for some reason it does
-	// (bug in GlobalContext, whatever) this will prevent a crash
+	nhcache_map_iter updated = nh_map->find(hash);	// this line is now needed, we want to check if we update or not 
+	if (updated == nh_map->end()) return false;	
+
 	/* UPDATE NH CACHE ACCESS ORDER */
 	nhcache_list_iter item = updated->second;
 
@@ -161,6 +160,7 @@ void TextureCache::insert(HANDLE replaced, uint64_t hash)
 #endif
 
 	map_insert(hash, nh_list->begin(), replaced);
+	return true;
 }
 
 
