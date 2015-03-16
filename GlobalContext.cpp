@@ -5,7 +5,7 @@
 #include "cachemap.h"
 #include <Windows.h>
 
-#define DEBUG 1
+#define DEBUG 0
 
 #if DEBUG
 double PCFreq = 0.0;
@@ -108,6 +108,7 @@ unsigned cache_size = 1000;
 TextureCache * texcache;
 
 void initCache(){
+	if(cache_size < 100) cache_size = 100;
 	texcache = new TextureCache(cache_size);
 }
 

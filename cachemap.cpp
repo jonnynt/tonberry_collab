@@ -68,12 +68,29 @@ HANDLE TextureCache::at(HANDLE replaced)
 #endif
 		return NULL;
 	}
-
+	fastupdate(map_iter);
 	return map_iter->second->second;
 }
 
+void TextureCache::fastupdate(nhcache_map_iter replaced){
+	//uint64_t hash = handlecache->find(replaced)->second;
+	////no need to check if it exists... it obviously does
+	//nhcache_map_iter updated = nh_map->find(hash);	// this line is now needed, we want to check if we update or not 
+	//if (updated == nh_map->end()) return;	//not actually needed, but will keep it, just in case ;)
 
-void TextureCache::map_insert(uint64_t hash, nhcache_list_iter item, HANDLE replaced)
+	/* UPDATE NH CACHE ACCESS ORDER */
+	nhcache_list_iter item = replaced->second;
+
+	// move (most-recently-accessed) list item to front of nh_list
+	nh_list->push_front(*item);
+	nh_list->erase(item);
+
+	replaced->second = nh_list->begin();
+
+	//don't need to update handlecache or reverse_handlecache since our precondition is to have all them coherent.
+}
+
+void TextureCache::map_insert(uint64_t hash, HANDLE replaced)
 {
 #if DEBUG
 	ofstream debug(debug_file, ofstream::out | ofstream::app);
@@ -81,7 +98,7 @@ void TextureCache::map_insert(uint64_t hash, nhcache_list_iter item, HANDLE repl
 
 	// update nh_map with new list item pointer
 	pair<nhcache_map_iter, bool> map_insertion = nh_map->insert(							// returns iterator to nh_map[hash] and boolean success
-		pair<uint64_t, nhcache_list_iter>(hash, item));
+		pair<uint64_t, nhcache_list_iter>(hash, nh_list->begin()));
 	if (!map_insertion.second)																// if nh_map already contained hash, 
 		map_insertion.first->second = nh_list->begin();										// change nh_map[hash] to nh_list->begin()
 
@@ -112,7 +129,7 @@ void TextureCache::map_insert(uint64_t hash, nhcache_list_iter item, HANDLE repl
 		cache_insertion.first->second = hash;												// change handlecache entry
 #if DEBUG
 		debug << "\tChanging (" << cache_insertion.first->first << ", (" << old_hash << ")) to ";
-		debug << "(" << replaced << ", (" << item->first << ")) in handlecache: ";
+		debug << "(" << replaced << ", (" << nh_list->begin()->first << ")) in handlecache: ";
 		debug << "nh_map[" << hash << "] = " << nh_map->at(hash)->second << endl;
 	} else {
 		debug << "\tAdding (" << replaced << ", (" << hash << ")) to handlecache: ";		// actually already did so in if() above
@@ -125,7 +142,7 @@ void TextureCache::map_insert(uint64_t hash, nhcache_list_iter item, HANDLE repl
 	reverse_handlecache->emplace(nhcache_item_t(hash, replaced));
 
 #if DEBUG
-	debug << "\tAdding (" << item->first << ", (" << replaced << ") to reverse_handlecache:" << endl;
+	debug << "\tAdding (" << nh_list->begin()->first << ", (" << replaced << ") to reverse_handlecache:" << endl;
 	pair<reverse_handlecache_iter, reverse_handlecache_iter> backpointer_range = reverse_handlecache->equal_range(hash);
 	reverse_handlecache_iter backpointer = reverse_handlecache->begin();// backpointer_range.first;
 	for (; /*backpointer != backpointer_range.second &&*/ backpointer != reverse_handlecache->end(); backpointer++)
@@ -134,24 +151,6 @@ void TextureCache::map_insert(uint64_t hash, nhcache_list_iter item, HANDLE repl
 	debug << endl;
 	debug.close();
 #endif
-}
-
-void TextureCache::fastupdate(HANDLE replaced){
-	uint64_t hash = handlecache->find(replaced)->second;
-	//no need to check if it exists... it obviously does
-	nhcache_map_iter updated = nh_map->find(hash);	// this line is now needed, we want to check if we update or not 
-	if (updated == nh_map->end()) return;	//not actually needed, but will keep it, just in case ;)
-
-	/* UPDATE NH CACHE ACCESS ORDER */
-	nhcache_list_iter item = updated->second;
-
-	// move (most-recently-accessed) list item to front of nh_list
-	nh_list->push_front(*item);
-	nh_list->erase(item);
-
-	updated->second = nh_list->begin();
-
-	//don't need to update handlecache or reverse_handlecache since our precondition is to have all them coherent.
 }
 
 bool TextureCache::update(HANDLE replaced, uint64_t hash)
@@ -177,7 +176,7 @@ bool TextureCache::update(HANDLE replaced, uint64_t hash)
 	debug.close();
 #endif
 
-	map_insert(hash, nh_list->begin(), replaced);
+	map_insert(hash, replaced);
 	return true;
 }
 
@@ -239,7 +238,7 @@ void TextureCache::insert(HANDLE replaced, uint64_t hash, HANDLE replacement)
 	debug.close();
 #endif
 
-	map_insert(hash, nh_list->begin(), replaced);
+	map_insert(hash, replaced);
 }
 
 void TextureCache::erase(HANDLE replaced)
