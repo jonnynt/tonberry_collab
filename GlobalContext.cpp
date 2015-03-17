@@ -1,8 +1,8 @@
 #include "Main.h"
+#include "cachemap.h"
 #include <stdint.h>
 #include <sstream>
 #include <boost\filesystem.hpp>
-#include "cachemap.h"
 #include <Windows.h>
 
 #define DEBUG 0
@@ -581,7 +581,6 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
     IDirect3DTexture9* pTexture = (IDirect3DTexture9*)Handle;   
 
     String debugtype = String("");
-
 	
       //  ofstream checkfile;
       //  checkfile.open ("tonberry/tests/checkiconflmaster.csv", ofstream::out | ofstream::app);
@@ -604,53 +603,53 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
 			texcache->erase(Handle);
             debugtype = String("nomatch");
         } else { //Texture FOUND in Hash_Algorithm_1 OR is a COLLISION
-            if (texturename == "COLLISION")
-            { //Run Hash_Algorithm_2
+			bool match = true;
+            if (texturename == "COLLISION") { //Run Hash_Algorithm_2
                 Hash_Algorithm_2(pData, pitch, Desc.Width, Desc.Height);
                 texturename = getfield2();
                 if (texturename == "NO_MATCH2") { 
 					//checkfile<<"\nCache erased on nomatch2, size: " << texcache->entries_ << endl;
 					texcache->erase(Handle);
 					debugtype = String("nomatch2"); 
+					match = false;
 				}
             }
 
-            string filename = texdir + "textures\\" + texturename.substr(0, 2) + "\\" + texturename.substr(0, texturename.rfind("_")) + "\\" + texturename + ".png";
-			if(!texcache->update(Handle,hash)){//directly updated if it succeeds we just end unlockrect cycle.
-                ifstream ifile(filename);
-                if (ifile.fail()) { 
-					texcache->erase(Handle);
-					debugtype = String("noreplace"); //No file, allow normal SetTexture
-                } else {    //Load texture into cache
-                    LPDIRECT3DDEVICE9 Device = g_Context->Graphics.Device();
-                    IDirect3DTexture9* newtexture;  
-                    Bitmap Bmp;
-                    Bmp.LoadPNG(String(filename.c_str()));
-                    DWORD Usage = D3DUSAGE_AUTOGENMIPMAP;
-                    D3DPOOL Pool = D3DPOOL_MANAGED;
-                    D3DFORMAT Format = D3DFMT_A8R8G8B8;
-                    Device->CreateTexture(int(resize_factor*(float)Desc.Width), int(resize_factor*(float)Desc.Height), 0, Usage, Format, Pool, &newtexture, NULL);
-                    D3DLOCKED_RECT newRect;
-                    newtexture->LockRect(0, &newRect, NULL, 0);
-                    BYTE* newData = (BYTE *)newRect.pBits;
-                    for(UINT y = 0; y < Bmp.Height(); y++)
-                    {
-                        RGBColor* CurRow = (RGBColor *)(newData + y * newRect.Pitch);
-                        for(UINT x = 0; x < Bmp.Width(); x++)   //works for textures of any size (e.g. 4-bit indexed)
-                        {
-                            RGBColor Color = Bmp[Bmp.Height() - y - 1][x];  //must flip image
-                            CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
-                        }
-                    }
-                    newtexture->UnlockRect(0); //Texture loaded
-                    HANDLE tempnewhandle = (HANDLE)newtexture;
-
-					texcache->insert(Handle,hash,tempnewhandle);
-               }
-
-            }
-
-        }
+			if (match) {
+				debugtype = String("replaced");
+				if (!texcache->update(Handle, hash)) { //directly updated if it succeeds we just end unlockrect cycle.
+					string filename = texdir + "textures\\" + texturename.substr(0, 2) + "\\" + texturename.substr(0, texturename.rfind("_")) + "\\" + texturename + ".png";
+					ifstream ifile(filename);
+					if (ifile.fail()) {
+						texcache->erase(Handle);
+						debugtype = String("noreplace"); //No file, allow normal SetTexture
+					} else {    //Load texture into cache
+						LPDIRECT3DDEVICE9 Device = g_Context->Graphics.Device();
+						IDirect3DTexture9* newtexture;
+						Bitmap Bmp;
+						Bmp.LoadPNG(String(filename.c_str()));
+						DWORD Usage = D3DUSAGE_AUTOGENMIPMAP;
+						D3DPOOL Pool = D3DPOOL_MANAGED;
+						D3DFORMAT Format = D3DFMT_A8R8G8B8;
+						Device->CreateTexture(int(resize_factor*(float)Desc.Width), int(resize_factor*(float)Desc.Height), 0, Usage, Format, Pool, &newtexture, NULL);
+						D3DLOCKED_RECT newRect;
+						newtexture->LockRect(0, &newRect, NULL, 0);
+						BYTE* newData = (BYTE *)newRect.pBits;
+						for (UINT y = 0; y < Bmp.Height(); y++) {
+							RGBColor* CurRow = (RGBColor *)(newData + y * newRect.Pitch);
+							for (UINT x = 0; x < Bmp.Width(); x++)   //works for textures of any size (e.g. 4-bit indexed)
+							{
+								RGBColor Color = Bmp[Bmp.Height() - y - 1][x];  //must flip image
+								CurRow[x] = RGBColor(Color.b, Color.g, Color.r, Color.a);
+							}
+						}
+						newtexture->UnlockRect(0); //Texture loaded
+						HANDLE tempnewhandle = (HANDLE)newtexture;
+						texcache->insert(Handle, hash, tempnewhandle);
+					}
+				}
+			}
+		}
         pTexture->UnlockRect(0); //Finished reading pTextures bits
     } else { //Video textures/improper format
        // this is the beauty of your solution; you replaced that whole O(n^2) loop bullshit with one line ;)
@@ -672,23 +671,22 @@ bool GlobalContext::SetTexture(DWORD Stage, HANDLE* SurfaceHandles, UINT Surface
 #if DEBUG
 	StartCounter();
 #endif
-       for (int j = 0; j < SurfaceHandleCount; j++) {
-               IDirect3DTexture9* newtexture;
-               if (SurfaceHandles[j] && (newtexture = (IDirect3DTexture9*)texcache->at(SurfaceHandles[j]))) {
-				  
-                       g_Context->Graphics.Device()->SetTexture(Stage, newtexture);
-                   //texcache->fastupdate(SurfaceHandles[j]);
-					   //((IDirect3DTexture9*)SurfaceHandles[j])->Release();
+	for (int j = 0; j < SurfaceHandleCount; j++) {
+		IDirect3DTexture9* newtexture;
+        if (SurfaceHandles[j] && (newtexture = (IDirect3DTexture9*)texcache->at(SurfaceHandles[j]))) {
+			g_Context->Graphics.Device()->SetTexture(Stage, newtexture);
+            //texcache->fastupdate(SurfaceHandles[j]);
+			//((IDirect3DTexture9*)SurfaceHandles[j])->Release();
 #if DEBUG
-  debug << GetCounter() << endl;
+	debug << GetCounter() << endl;
 #endif
-                       return true;
-               } // Texture replaced!
-       }
+            return true;
+		} // Texture replaced!
+	}
 #if DEBUG
-  debug << GetCounter() << endl;
+	debug << GetCounter() << endl;
 #endif
-       return false;
+	return false;
 }
 
 //Unused functions
