@@ -51,6 +51,13 @@ namespace fs = boost::filesystem;
 
 GlobalContext *g_Context;
 
+typedef enum {
+	MATCH		= 0,
+	NOMATCH		= 1,
+	NOMATCH2	= 2,
+	COLLISION	= 3
+}Matchtype;
+
 void GraphicsInfo::Init()
 {
     _Device = NULL;
@@ -357,10 +364,11 @@ void Hash_Algorithm_2 (BYTE* pData, UINT pitch, int width, int height)	//hash al
 	}
 }
 
-string getsysfld (BYTE* pData, UINT pitch, int width, int height, string sysfld)	//Exception method for sysfld00 and sysfld01
+Matchtype getsysfld (BYTE* pData, UINT pitch, int width, int height, string & sysfld)	//Exception method for sysfld00 and sysfld01
 {
 	UINT x = 177;
 	UINT y = 155;
+	string tempstr = sysfld;
 	RGBColor* CurRow = (RGBColor*)(pData + (y) * pitch);
 	RGBColor Color = CurRow[x];
 	int sysval = (Color.r + Color.g + Color.b) / 3;
@@ -376,13 +384,15 @@ string getsysfld (BYTE* pData, UINT pitch, int width, int height, string sysfld)
 		case 255: syspage = "20"; break;
 		default: syspage = "13"; break;
 	}
-	return sysfld.substr(0, 9) + syspage;
+	sysfld = tempstr.substr(0, 9) + syspage;
+	return Matchtype::MATCH;
 }
 
-string geticonfl (BYTE* pData, UINT pitch, int width, int height, string iconfl)	//Exception method for iconfl00, iconfl01, iconfl02, iconfl03, iconflmaster
+Matchtype geticonfl (BYTE* pData, UINT pitch, int width, int height, string & iconfl)	//Exception method for iconfl00, iconfl01, iconfl02, iconfl03, iconflmaster
 {
 	UINT x = 0;
 	UINT y = 0;
+	string tempstr = iconfl;
 	if (iconfl == "iconfl00_13") { x = 82; y = 150; }
 	else if (iconfl == "iconfl01_13") { x = 175; y = 208; }
 	else if (iconfl == "iconfl02_13") { x = 216; y = 108; }
@@ -419,10 +429,11 @@ string geticonfl (BYTE* pData, UINT pitch, int width, int height, string iconfl)
 		case 4410944: icpage = "28"; break;
 		default: icpage = "13"; break;
 	}
-	return iconfl.substr(0, iconfl.size()-2) + icpage;
+	iconfl = tempstr.substr(0, iconfl.size()-2) + icpage;
+	return Matchtype::MATCH;
 }
 
-string getobj (uint64_t & hash) //if previously unmatched, searches through object map for objects in top left/bottom left memory quarters, finally NO_MATCH is returned
+Matchtype getobj (uint64_t & hash, string & texname) //if previously unmatched, searches through object map for objects in top left/bottom left memory quarters, finally NO_MATCH is returned
 {
 	objtop = 0;
 	objbot = 0;
@@ -441,16 +452,20 @@ string getobj (uint64_t & hash) //if previously unmatched, searches through obje
 	it = objmap.find(objtop);
 	if (it != objmap.end()) { 
 		hash = objtop;
-		return it->second; }
+		texname = it->second; 
+		return Matchtype::MATCH ;
+	}
 	it = objmap.find(objbot);
 	if (it != objmap.end()) { 
 		hash = objbot;
-		return it->second; }
+		texname = it->second; 
+		return Matchtype::MATCH;
+	}
 	hash = 0;
-	return "NO_MATCH";
+	return Matchtype::NOMATCH;
 }
 
-string getfield (uint64_t & hash)	//simple sequential bit comparisons
+Matchtype getfield (uint64_t & hash, string & texname)	//simple sequential bit comparisons
 {
 	ofstream checkfile;
 	//checkfile.open("tonberry/tests/hashcache_test.txt", ofstream::out| ofstream::app);
@@ -466,20 +481,21 @@ string getfield (uint64_t & hash)	//simple sequential bit comparisons
 	it = hashmap.find(hashval);
 	if (it != hashmap.end()) { 
 		hash = hashval;
-		return it->second; 
+		texname = it->second; 
+		return Matchtype::MATCH;
 	}
 	else {
 		it = collmap.find(hashval);
 		if (it != collmap.end()) {
 			hash = hashval;
-			return "COLLISION"; 
+			return Matchtype::COLLISION; 
 		}
 	}
 
-	return getobj(hash);
+	return getobj(hash, texname);
 }
 
-string getfield2 ()	//simple sequential bit comparisons, algorithm 2
+Matchtype getfield2 (string & texname)	//simple sequential bit comparisons, algorithm 2
 {
 	hashval2 = 0;
 	int lastpixel = pixval2[97];
@@ -490,11 +506,14 @@ string getfield2 ()	//simple sequential bit comparisons, algorithm 2
 		lastpixel = pixval2[i];
     }
 	it2 = coll2map.find(hashval2.getNumber());
-	if (it2 != coll2map.end()) { return it2->second; }
-	return "NO_MATCH2";
+	if (it2 != coll2map.end()) { 
+		texname = it2->second; 
+		return Matchtype::MATCH;
+	}
+	return Matchtype::NOMATCH2;
 }
 
-uint64_t parseiconfl(string texname){ 
+uint64_t parseiconfl(const string & texname){ 
 //that crappy quick-fix function will allow us to identify the ic textures until the new hashing is ready.
 	uint64_t hash = 0;
 	string token;
@@ -539,7 +558,7 @@ uint64_t parseiconfl(string texname){
 	return hash;
 }
 
-uint64_t parsesysfld(string texname){
+uint64_t parsesysfld(const string & texname){
 	uint64_t hash = 0;
 	string token;
 	ofstream check;
@@ -580,10 +599,8 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
 {
     IDirect3DTexture9* pTexture = (IDirect3DTexture9*)Handle;   
 
-    String debugtype = String("");
+    String debugtype = String("error");
 	
-      //  ofstream checkfile;
-      //  checkfile.open ("tonberry/tests/checkiconflmaster.csv", ofstream::out | ofstream::app);
     if (pTexture && Desc.Width < 640 && Desc.Height < 480 && Desc.Format == D3DFORMAT::D3DFMT_A8R8G8B8 && Desc.Pool == D3DPOOL::D3DPOOL_MANAGED)    //640x480 are video
     {
         D3DLOCKED_RECT Rect;
@@ -592,30 +609,35 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
         BYTE* pData = (BYTE*)Rect.pBits;
 
         uint64_t hash;
+		string texturename;
+		Matchtype match;
         Hash_Algorithm_1(pData, pitch, Desc.Width, Desc.Height);    //Run Hash_Algorithm_1
-        string texturename = getfield(hash);
+        match = getfield(hash, texturename);
 
-        if (texturename == "sysfld00_13" || texturename == "sysfld01_13") { texturename = getsysfld(pData, pitch, Desc.Width, Desc.Height, texturename);hash = parsesysfld(texturename);} //Exception for sysfld00 and sysfld01
-        if (texturename == "iconfl00_13" || texturename == "iconfl01_13" || texturename == "iconfl02_13" || texturename == "iconfl03_13" || texturename == "iconflmaster_13") { texturename = geticonfl(pData, pitch, Desc.Width, Desc.Height, texturename); hash = parseiconfl(texturename);} //Exception for iconfl00, iconfl01, iconfl02, iconfl03, iconflmaster
+        if (texturename == "sysfld00_13" || texturename == "sysfld01_13") { //Exception for sysfld00 and sysfld01
+			match = getsysfld(pData, pitch, Desc.Width, Desc.Height, texturename); 
+			hash = parsesysfld(texturename);
+		} 
+        if (texturename == "iconfl00_13" || texturename == "iconfl01_13" || texturename == "iconfl02_13" || texturename == "iconfl03_13" || texturename == "iconflmaster_13") { //Exception for iconfl00, iconfl01, iconfl02, iconfl03, iconflmaster
+			match = geticonfl(pData, pitch, Desc.Width, Desc.Height, texturename); 
+			hash = parseiconfl(texturename);
+		} 
         
-        if (texturename == "NO_MATCH")
+        if (match == Matchtype::NOMATCH)
         { //Handle inválido, lo borro, pero no su posible textura asociada.
 			texcache->erase(Handle);
             debugtype = String("nomatch");
         } else { //Texture FOUND in Hash_Algorithm_1 OR is a COLLISION
-			bool match = true;
-            if (texturename == "COLLISION") { //Run Hash_Algorithm_2
+            if (match == Matchtype::COLLISION) { //Run Hash_Algorithm_2
                 Hash_Algorithm_2(pData, pitch, Desc.Width, Desc.Height);
-                texturename = getfield2();
-                if (texturename == "NO_MATCH2") { 
-					//checkfile<<"\nCache erased on nomatch2, size: " << texcache->entries_ << endl;
+                texturename = getfield2(texturename);
+                if (match == Matchtype::NOMATCH2) { 
 					texcache->erase(Handle);
 					debugtype = String("nomatch2"); 
-					match = false;
 				}
             }
 
-			if (match) {
+			if (match == Matchtype::MATCH) {
 				debugtype = String("replaced");
 				if (!texcache->update(Handle, hash)) { //directly updated if it succeeds we just end unlockrect cycle.
 					string filename = texdir + "textures\\" + texturename.substr(0, 2) + "\\" + texturename.substr(0, texturename.rfind("_")) + "\\" + texturename + ".png";
@@ -654,7 +676,7 @@ void GlobalContext::UnlockRect (D3DSURFACE_DESC &Desc, Bitmap &BmpUseless, HANDL
     } else { //Video textures/improper format
        // this is the beauty of your solution; you replaced that whole O(n^2) loop bullshit with one line ;)
 		texcache->erase(Handle);
-		debugtype = String("error");
+		debugtype = String("unsupported");
     }
     //Debug
     if(debugmode){
